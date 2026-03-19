@@ -1,6 +1,6 @@
 import json
 import os
-from scrapers import devpost, dorahacks, gitcoin, reddit, github_search, twitter
+from scrapers import devpost, dorahacks, gitcoin, mlh, reddit, github_search, twitter
 import processor
 import notifier
 
@@ -36,7 +36,7 @@ def main():
 
     # Collect from all sources
     all_items = []
-    for scraper in [devpost, dorahacks, gitcoin, reddit, github_search, twitter]:
+    for scraper in [devpost, dorahacks, gitcoin, mlh, reddit, github_search, twitter]:
         name = scraper.__name__.split(".")[-1]
         try:
             items = scraper.fetch()
