@@ -1,4 +1,13 @@
+import re
 import requests
+
+
+def _parse_prize(raw: str) -> str:
+    """Strip HTML and return prize string."""
+    if not raw:
+        return "N/A"
+    text = re.sub(r"<[^>]+>", "", raw).strip()
+    return text if text else "N/A"
 
 
 def fetch(limit=20):
@@ -6,11 +15,11 @@ def fetch(limit=20):
     url = "https://devpost.com/api/hackathons"
     params = {
         "status[]": "open",
-        "order_by": "deadline",
+        "order_by": "prize_amount",
         "per_page": limit,
     }
     headers = {
-        "User-Agent": "Mozilla/5.0 (compatible; HackathonBot/1.0)",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "application/json",
     }
     results = []
@@ -19,13 +28,15 @@ def fetch(limit=20):
         resp.raise_for_status()
         data = resp.json()
         for item in data.get("hackathons", [])[:limit]:
+            prize = _parse_prize(item.get("prize_amount", ""))
+            themes = [t["name"] for t in item.get("themes", [])]
             results.append({
                 "source": "Devpost",
                 "title": item.get("title", "N/A"),
                 "url": item.get("url", ""),
-                "prize": item.get("prize_amount", "N/A"),
+                "prize": prize,
                 "deadline": item.get("submission_period_dates", "N/A"),
-                "raw": f"{item.get('title', '')} {item.get('tagline', '')} {item.get('themes', '')}".strip()[:500],
+                "raw": f"{item.get('title', '')} {' '.join(themes)} {item.get('organization_name', '')}".strip()[:500],
             })
     except Exception as e:
         print(f"[Devpost] Error: {e}")
