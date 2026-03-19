@@ -1,33 +1,50 @@
 import requests
+from datetime import datetime
 
-# Keywords that indicate a coding/building task (not content/design/marketing)
-_CODE_KEYWORDS = [
-    "build", "develop", "code", "hack", "sdk", "program", "smart contract",
-    "anchor", "dapp", "api", "solana", "blockchain", "protocol", "deploy",
-    "integration", "extension", "vault", "escrow", "challenge", "project",
-    "trading", "defi", "web3", "submission",
+# Must have at least one of these to be considered a coding task
+_REQUIRE_ANY = [
+    "build", "develop", "hack", "sdk", "smart contract", "anchor",
+    "dapp", "deploy", "integration", "vault", "escrow", "program",
+    "submission", "project submission", "tradfi", "trading competition",
+    "solrouter", "solana developer", "beginner developer", "intermediate developer",
 ]
 
-_SKIP_KEYWORDS = [
-    "thread", "tweet", "ambassador", "video content", "article", "write ",
-    "sticker", "design ", "feedback", "spotlight", "story", "explain",
-    "content bounty", "illustration", "animation",
+# Skip if any of these appear
+_SKIP_ANY = [
+    "thread", "tweet", "ambassador", "video", "article", "write ",
+    "sticker", "design ", "feedback", "spotlight", "story of",
+    "content bounty", "illustration", "animation", "pitch contest",
+    "pitch a startup", "business challenge", "market research",
+    "interview", "what solana means", "explain", "share your experience",
+    "día en", "qué significa", "escreva", "janamat", "voble",
+    "blind signing", "day in the life",
 ]
 
-MIN_PRIZE_USD = 300
+MIN_PRIZE_USD = 400
 
 
 def _is_coding(title: str) -> bool:
     t = title.lower()
-    if any(kw in t for kw in _SKIP_KEYWORDS):
+    if any(kw in t for kw in _SKIP_ANY):
         return False
-    return any(kw in t for kw in _CODE_KEYWORDS)
+    return any(kw in t for kw in _REQUIRE_ANY)
+
+
+def _fmt_date(iso: str) -> str:
+    """Convert '2026-04-06T23:59:59.000Z' → 'Apr 06, 2026'."""
+    if not iso or iso in ("N/A", "See website"):
+        return iso
+    try:
+        dt = datetime.strptime(iso[:10], "%Y-%m-%d")
+        return dt.strftime("%b %d, %Y")
+    except ValueError:
+        return iso
 
 
 def fetch(limit=20):
     """Fetch open coding bounties from Superteam Earn (Solana ecosystem)."""
     url = "https://earn.superteam.fun/api/listings/"
-    params = {"type": "bounty", "status": "open", "limit": 50}
+    params = {"type": "bounty", "status": "open", "limit": 60}
     headers = {"User-Agent": "Mozilla/5.0 (compatible; HackathonBot/1.0)"}
     results = []
 
@@ -51,15 +68,16 @@ def fetch(limit=20):
             slug = item.get("slug", item.get("id", ""))
             sponsor = item.get("sponsor", {}).get("name", "")
             submissions = item.get("_count", {}).get("Submission", None)
+            deadline_raw = item.get("deadline", "N/A")
 
             results.append({
                 "source": "Superteam Earn",
                 "title": title,
                 "url": f"https://earn.superteam.fun/listing/{slug}" if slug else "https://earn.superteam.fun/",
                 "prize": f"${reward:,.0f} {token}",
-                "deadline": item.get("deadline", "N/A"),
+                "deadline": _fmt_date(deadline_raw),
                 "participants": submissions,
-                "raw": f"{title} {sponsor} Solana Web3 bounty build".strip()[:500],
+                "raw": f"{title} {sponsor} Solana Web3 build coding bounty".strip()[:500],
             })
 
             if len(results) >= limit:
