@@ -1,39 +1,127 @@
 import json
 import os
 import re
-from scrapers import devpost, dorahacks, gitcoin, mlh, reddit, github_search, twitter
+from datetime import datetime
+from scrapers import devpost, dorahacks, gitcoin, mlh, replit, reddit, github_search, twitter
 import processor
 import notifier
 
 
-def _prize_value(prize_str) -> float:
-    """Extract numeric USD value from a prize string for sorting. Returns 0 if unparseable."""
-    if not prize_str or str(prize_str).strip() in ("N/A", "None", "", "See listing", "Various", "See website"):
-        return 0.0
-    raw = str(prize_str)
-    # Strip currency symbols and commas, grab first number
-    nums = re.findall(r"[\d,]+", raw.replace(",", ""))
+# ── Currency conversion ────────────────────────────────────────────────────────
+# Approximate rates to USD (update periodically)
+_CURRENCY_RATES = [
+    ("₹",  1 / 85),    # INR
+    ("€",  1.08),       # EUR
+    ("£",  1.27),       # GBP
+    ("¥",  1 / 150),    # JPY
+    ("C$", 0.73),       # CAD
+    ("A$", 0.64),       # AUD
+    ("$",  1.0),        # USD — must be last to avoid matching C$/A$
+]
+
+
+def _to_usd(prize_str) -> tuple[float, str]:
+    """Return (usd_value, display_string). Converts any currency to USD."""
+    raw = str(prize_str or "").strip()
+    if raw in ("", "N/A", "None", "See listing", "Various", "See website"):
+        return 0.0, raw or "N/A"
+
+    rate, symbol = 1.0, "$"
+    for sym, r in _CURRENCY_RATES:
+        if sym in raw:
+            rate, symbol = r, sym
+            break
+
+    nums = re.findall(r"\d+", raw.replace(",", ""))
     if not nums:
-        return 0.0
-    value = float(nums[0])
-    # Rough INR→USD conversion so rupee prizes sort reasonably
-    if "₹" in raw or "INR" in raw.upper():
-        value /= 85
-    return value
+        return 0.0, raw
+
+    usd = float(nums[0]) * rate
+    if symbol == "$":
+        return usd, f"${int(usd):,}"
+    else:
+        return usd, f"${int(usd):,} (~{raw})"
 
 
+# ── Deadline parsing ───────────────────────────────────────────────────────────
+_MONTH_MAP = {
+    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+    "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+}
+
+
+def _parse_end_date(deadline_str: str):
+    """Parse the end date from a deadline string like 'Feb 09 - Mar 25, 2026'."""
+    if not deadline_str or deadline_str in ("N/A", "None", "See listing", "See website"):
+        return None
+
+    parts = deadline_str.split(" - ")
+    start_str = parts[0].strip()
+    end_str = parts[-1].strip()
+
+    # "Apr 07, 2026"
+    try:
+        return datetime.strptime(end_str, "%b %d, %Y")
+    except ValueError:
+        pass
+
+    # "30, 2026" — same month as start
+    m = re.match(r"(\d+),\s*(\d{4})", end_str)
+    if m:
+        day, year = int(m.group(1)), int(m.group(2))
+        month_m = re.search(r"([A-Za-z]{3})", start_str)
+        if month_m:
+            month = _MONTH_MAP.get(month_m.group(1).lower())
+            if month:
+                try:
+                    return datetime(year, month, day)
+                except ValueError:
+                    pass
+
+    # ISO "2026-04-07T..."
+    iso_m = re.search(r"(\d{4}-\d{2}-\d{2})", end_str)
+    if iso_m:
+        try:
+            return datetime.strptime(iso_m.group(1), "%Y-%m-%d")
+        except ValueError:
+            pass
+
+    return None
+
+
+# ── Filter & sort ──────────────────────────────────────────────────────────────
 def filter_and_sort(items: list) -> list:
-    """Keep only items with real prizes or prestige org. Sort by prize descending."""
+    """Remove expired/no-prize items, normalize prizes to USD, sort by prize."""
+    now = datetime.utcnow()
     result = []
+
     for item in items:
-        prize_val = _prize_value(item.get("prize"))
+        # Skip expired
+        end_date = _parse_end_date(item.get("deadline", ""))
+        if end_date and end_date < now:
+            print(f"[Filter] Expired: {item['title']} (ended {end_date.date()})")
+            continue
+
+        # Normalize prize to USD
+        usd_val, usd_display = _to_usd(item.get("prize"))
+        item["prize"] = usd_display
+        item["_prize_val"] = usd_val
+
+        # Ending soon label
+        if end_date:
+            days_left = (end_date - now).days
+            if days_left <= 7:
+                item["_days_left"] = days_left
+
         is_prestige = item.get("prestige", False)
-        if prize_val > 0 or is_prestige:
-            item["_prize_val"] = prize_val
+        if usd_val > 0 or is_prestige:
             result.append(item)
+
     result.sort(key=lambda x: x["_prize_val"], reverse=True)
     return result
 
+
+# ── Deduplication ──────────────────────────────────────────────────────────────
 SEEN_FILE = "seen.json"
 
 
@@ -50,8 +138,7 @@ def save_seen(seen: set):
 
 
 def deduplicate(items: list, seen: set) -> tuple[list, set]:
-    new_items = []
-    new_seen = set(seen)
+    new_items, new_seen = [], set(seen)
     for item in items:
         key = item.get("url") or item.get("title", "")
         if key and key not in new_seen:
@@ -60,13 +147,13 @@ def deduplicate(items: list, seen: set) -> tuple[list, set]:
     return new_items, new_seen
 
 
+# ── Main ───────────────────────────────────────────────────────────────────────
 def main():
     print("=== Hackathon Aggregator Starting ===")
     seen = load_seen()
 
-    # Collect from all sources
     all_items = []
-    for scraper in [devpost, dorahacks, gitcoin, mlh, reddit, github_search, twitter]:
+    for scraper in [devpost, dorahacks, gitcoin, mlh, replit, reddit, github_search, twitter]:
         name = scraper.__name__.split(".")[-1]
         try:
             items = scraper.fetch()
@@ -77,23 +164,17 @@ def main():
 
     print(f"Total raw items: {len(all_items)}")
 
-    # Deduplicate
     new_items, updated_seen = deduplicate(all_items, seen)
     print(f"New (unseen) items: {len(new_items)}")
 
-    # Analyze with DeepSeek
     enriched = processor.analyze(new_items)
     relevant = [it for it in enriched if it.get("relevant", True)]
     print(f"Relevant items after filtering: {len(relevant)}")
 
-    # Filter (prize > 0 or prestige) and sort by prize descending
     final = filter_and_sort(relevant)
-    print(f"Final items after prize filter: {len(final)}")
+    print(f"Final items after prize/expiry filter: {len(final)}")
 
-    # Send to Telegram
     notifier.send_digest(final)
-
-    # Save updated seen set
     save_seen(updated_seen)
     print("=== Done ===")
 

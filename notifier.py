@@ -58,6 +58,10 @@ def send_digest(items: list):
         description = _strip_html(item.get("description", item.get("raw", "")))[:200]
         prize = item.get("prize", "N/A")
         deadline = item.get("deadline", "N/A")
+        days_left = item.get("_days_left")
+        deadline_display = deadline
+        if days_left is not None:
+            deadline_display += f" ⏰ {days_left}d left!"
         level = item.get("level", "N/A")
         technologies = item.get("technologies", "N/A")
         participants = item.get("participants")
@@ -67,7 +71,7 @@ def send_digest(items: list):
             f"<b>{i}. {title}</b>\n"
             f"📋 {description}\n"
             f"💰 Prize: {prize}\n"
-            f"📅 Deadline: {deadline}\n"
+            f"📅 Deadline: {deadline_display}\n"
             f"🎯 Level: {level}"
         )
         if technologies and technologies not in ("N/A", "Not specified"):
