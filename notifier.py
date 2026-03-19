@@ -60,6 +60,7 @@ def send_digest(items: list):
         deadline = item.get("deadline", "N/A")
         level = item.get("level", "N/A")
         technologies = item.get("technologies", "N/A")
+        participants = item.get("participants")
         url = item.get("url", "")
 
         block = (
@@ -69,8 +70,10 @@ def send_digest(items: list):
             f"📅 Deadline: {deadline}\n"
             f"🎯 Level: {level}"
         )
-        if technologies and technologies != "N/A":
-            block += f" ({technologies})"
+        if technologies and technologies not in ("N/A", "Not specified"):
+            block += f" | {technologies}"
+        if participants:
+            block += f"\n👥 Participants: {participants:,}" if isinstance(participants, int) else f"\n👥 Participants: {participants}"
         if url:
             block += f"\n🔗 {url}"
         block += "\n\n"

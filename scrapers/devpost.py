@@ -30,13 +30,16 @@ def fetch(limit=20):
         for item in data.get("hackathons", [])[:limit]:
             prize = _parse_prize(item.get("prize_amount", ""))
             themes = [t["name"] for t in item.get("themes", [])]
+            deadline = item.get("submission_period_dates", "N/A")
+            participants = item.get("registrations_count", None)
             results.append({
                 "source": "Devpost",
                 "title": item.get("title", "N/A"),
                 "url": item.get("url", ""),
                 "prize": prize,
-                "deadline": item.get("submission_period_dates", "N/A"),
-                "raw": f"{item.get('title', '')} {' '.join(themes)} {item.get('organization_name', '')}".strip()[:500],
+                "deadline": deadline,
+                "participants": participants,
+                "raw": f"{item.get('title', '')} {' '.join(themes)} {item.get('organization_name', '')} prize:{prize} deadline:{deadline}".strip()[:500],
             })
     except Exception as e:
         print(f"[Devpost] Error: {e}")

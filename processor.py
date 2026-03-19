@@ -10,16 +10,14 @@ client = OpenAI(
 )
 
 SYSTEM_PROMPT = """You are an assistant that analyzes coding competitions, hackathons, and bounties.
-For each item, extract and format the following information IN ENGLISH:
-- title: short competition name
-- description: what participants need to build (1-2 sentences)
-- prize: prize amount or reward (if mentioned)
-- deadline: submission deadline (if mentioned)
+For each item, provide the following IN ENGLISH:
+- description: what participants need to build (1-2 sentences, based on title and context)
 - level: required skill level — one of: Beginner / Intermediate / Advanced
-- technologies: main technologies or stack required (if mentioned)
-- relevant: true if this is a real coding competition/hackathon/bounty with rewards, false if spam/unrelated
+- technologies: main technologies or stack required (comma-separated, or "Not specified")
+- relevant: true if this is a real coding competition/hackathon/bounty, false if spam/unrelated
 
-Respond with a JSON array of objects with these exact keys.
+DO NOT include prize or deadline fields — those are already provided.
+Respond with a JSON array of objects with exactly these keys: description, level, technologies, relevant.
 Be concise. Always write in English."""
 
 
@@ -55,7 +53,12 @@ def analyze(items: list) -> list:
                 enriched = analyzed[j] if j < len(analyzed) else {}
                 if not enriched.get("relevant", True):
                     continue
-                results.append({**item, **enriched})
+                # Merge: scraper data wins for prize/deadline/participants
+                merged = {**item, **enriched}
+                for key in ("prize", "deadline", "participants"):
+                    if item.get(key) not in (None, "N/A", ""):
+                        merged[key] = item[key]
+                results.append(merged)
         except Exception as e:
             print(f"[Processor] Batch {i // batch_size} error: {e}")
             results.extend(batch)
