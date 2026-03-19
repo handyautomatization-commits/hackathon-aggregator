@@ -15,9 +15,10 @@ For each item, provide the following IN ENGLISH:
 - level: required skill level — one of: Beginner / Intermediate / Advanced
 - technologies: main technologies or stack required (comma-separated, or "Not specified")
 - relevant: true if this is a real coding competition/hackathon/bounty, false if spam/unrelated
+- prestige: true if organized by a well-known tech company, major crypto/Web3 project, or brand that is valuable for a developer's portfolio (e.g. GitLab, Auth0, Seismic, Solana Foundation, Ethereum Foundation, Google, AWS, etc.), false otherwise
 
 DO NOT include prize or deadline fields — those are already provided.
-Respond with a JSON array of objects with exactly these keys: description, level, technologies, relevant.
+Respond with a JSON array of objects with exactly these keys: description, level, technologies, relevant, prestige.
 Be concise. Always write in English."""
 
 
