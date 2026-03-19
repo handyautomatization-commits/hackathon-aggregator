@@ -44,6 +44,7 @@ def fetch(limit=20):
                 "url": "https://dorahacks.io/hackathon",
                 "prize": "Various",
                 "deadline": "See website",
+                "_is_pointer": True,
                 "raw": "DoraHacks hosts Web3 hackathons and bounties. Visit the website to see currently open competitions.",
             })
     except Exception as e:

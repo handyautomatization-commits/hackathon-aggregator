@@ -97,5 +97,6 @@ def _fallback():
         "prize": "Various",
         "deadline": "See website",
         "participants": None,
+        "_is_pointer": True,
         "raw": "Replit hosts coding bounties where developers build apps for clients. 1 Cycle = $0.01 USD.",
     }]

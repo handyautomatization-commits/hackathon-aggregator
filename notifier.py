@@ -41,56 +41,83 @@ def _source_stats(items: list) -> str:
     return ", ".join(f"{k} ({v})" for k, v in sorted(counts.items()))
 
 
+def _format_block(i: int, item: dict) -> str:
+    title = _strip_html(item.get("title", "N/A"))[:80]
+    description = _strip_html(item.get("description", item.get("raw", "")))[:200]
+    prize = item.get("prize", "N/A")
+    deadline = item.get("deadline", "N/A")
+    days_left = item.get("_days_left")
+    deadline_display = deadline
+    if days_left is not None:
+        deadline_display += f" ⏰ {days_left}d left!"
+    level = item.get("level", "N/A")
+    technologies = item.get("technologies", "N/A")
+    participants = item.get("participants")
+    url = item.get("url", "")
+
+    block = (
+        f"<b>{i}. {title}</b>\n"
+        f"📋 {description}\n"
+        f"💰 Prize: {prize}\n"
+        f"📅 Deadline: {deadline_display}\n"
+        f"🎯 Level: {level}"
+    )
+    if technologies and technologies not in ("N/A", "Not specified"):
+        block += f" | {technologies}"
+    if participants:
+        block += f"\n👥 Participants: {participants:,}" if isinstance(participants, int) else f"\n👥 Participants: {participants}"
+    if url:
+        block += f"\n🔗 {url}"
+    block += "\n\n"
+    return block
+
+
+def _flush(messages: list, current: str) -> str:
+    """Send current message and reset buffer."""
+    _send(current.rstrip())
+    return ""
+
+
 def send_digest(items: list):
     """Format and send weekly digest to Telegram."""
     today = datetime.utcnow().strftime("%d %b %Y")
-    if not items:
+
+    main_items = [it for it in items if not it.get("_is_pointer")]
+    pointer_items = [it for it in items if it.get("_is_pointer")]
+
+    if not main_items and not pointer_items:
         _send(f"🏆 <b>Weekly Coding Competitions | {today}</b>\n\nNo new competitions found this week.")
         return
 
-    header = f"🏆 <b>Weekly Coding Competitions | {today}</b>\n\n"
-    messages = [header]
-    current_msg = header
     MAX_LEN = 4000
+    header = f"🏆 <b>Weekly Coding Competitions | {today}</b>\n\n"
+    current_msg = header
 
-    for i, item in enumerate(items, 1):
-        title = _strip_html(item.get("title", "N/A"))[:80]
-        description = _strip_html(item.get("description", item.get("raw", "")))[:200]
-        prize = item.get("prize", "N/A")
-        deadline = item.get("deadline", "N/A")
-        days_left = item.get("_days_left")
-        deadline_display = deadline
-        if days_left is not None:
-            deadline_display += f" ⏰ {days_left}d left!"
-        level = item.get("level", "N/A")
-        technologies = item.get("technologies", "N/A")
-        participants = item.get("participants")
-        url = item.get("url", "")
-
-        block = (
-            f"<b>{i}. {title}</b>\n"
-            f"📋 {description}\n"
-            f"💰 Prize: {prize}\n"
-            f"📅 Deadline: {deadline_display}\n"
-            f"🎯 Level: {level}"
-        )
-        if technologies and technologies not in ("N/A", "Not specified"):
-            block += f" | {technologies}"
-        if participants:
-            block += f"\n👥 Participants: {participants:,}" if isinstance(participants, int) else f"\n👥 Participants: {participants}"
-        if url:
-            block += f"\n🔗 {url}"
-        block += "\n\n"
-
+    for i, item in enumerate(main_items, 1):
+        block = _format_block(i, item)
         if len(current_msg) + len(block) > MAX_LEN:
             _send(current_msg.rstrip())
             current_msg = block
         else:
             current_msg += block
 
-    stats = f"Total found: {len(items)}\nSources: {_source_stats(items)}"
+    # Stats line
+    stats = f"Total: {len(main_items)} competitions\nSources: {_source_stats(main_items)}"
     if len(current_msg) + len(stats) > MAX_LEN:
         _send(current_msg.rstrip())
-        _send(stats)
+        current_msg = stats
     else:
-        _send(current_msg.rstrip() + "\n\n" + stats)
+        current_msg += stats
+
+    # "Also check" section for pointer items
+    if pointer_items:
+        also_check = "\n\n🔍 <b>Also check:</b>\n"
+        for it in pointer_items:
+            also_check += f"• {it.get('title', 'N/A')} — {it.get('url', '')}\n"
+        if len(current_msg) + len(also_check) > MAX_LEN:
+            _send(current_msg.rstrip())
+            _send(also_check.strip())
+        else:
+            _send((current_msg + also_check).rstrip())
+    else:
+        _send(current_msg.rstrip())

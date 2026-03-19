@@ -2,7 +2,7 @@ import json
 import os
 import re
 from datetime import datetime
-from scrapers import devpost, dorahacks, gitcoin, mlh, replit, reddit, github_search, twitter
+from scrapers import devpost, dorahacks, gitcoin, mlh, replit, superteam, reddit, github_search, twitter
 import processor
 import notifier
 
@@ -110,14 +110,20 @@ def filter_and_sort(items: list) -> list:
         # Ending soon label
         if end_date:
             days_left = (end_date - now).days
-            if days_left <= 7:
+            if days_left <= 14:
                 item["_days_left"] = days_left
 
         is_prestige = item.get("prestige", False)
-        if usd_val > 0 or is_prestige:
+        is_pointer = item.get("_is_pointer", False)
+
+        if is_pointer:
+            item["_prize_val"] = 0
+            result.append(item)
+        elif usd_val > 0 or is_prestige:
             result.append(item)
 
-    result.sort(key=lambda x: x["_prize_val"], reverse=True)
+    # Sort: real competitions first (by prize), pointers at the end
+    result.sort(key=lambda x: (x.get("_is_pointer", False), -x["_prize_val"]))
     return result
 
 
@@ -153,7 +159,7 @@ def main():
     seen = load_seen()
 
     all_items = []
-    for scraper in [devpost, dorahacks, gitcoin, mlh, replit, reddit, github_search, twitter]:
+    for scraper in [devpost, dorahacks, gitcoin, mlh, replit, superteam, reddit, github_search, twitter]:
         name = scraper.__name__.split(".")[-1]
         try:
             items = scraper.fetch()

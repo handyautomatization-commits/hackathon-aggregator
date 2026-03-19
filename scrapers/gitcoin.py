@@ -40,6 +40,7 @@ def fetch(limit=20):
             "url": "https://gitcoin.co/explorer?network=mainnet&order_by=-web3_created&is_open=true",
             "prize": "Various",
             "deadline": "See website",
+            "_is_pointer": True,
             "raw": "Gitcoin hosts Web3 open source bounties. Visit the explorer to see currently open bounties.",
         })
 
