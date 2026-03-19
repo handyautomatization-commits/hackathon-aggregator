@@ -1,6 +1,15 @@
+import html
 import os
+import re
 import requests
 from datetime import datetime
+
+
+def _strip_html(text: str) -> str:
+    """Remove HTML tags and decode entities."""
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = html.unescape(text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -45,8 +54,8 @@ def send_digest(items: list):
     MAX_LEN = 4000
 
     for i, item in enumerate(items, 1):
-        title = item.get("title", "N/A")[:80]
-        description = item.get("description", item.get("raw", ""))[:200]
+        title = _strip_html(item.get("title", "N/A"))[:80]
+        description = _strip_html(item.get("description", item.get("raw", "")))[:200]
         prize = item.get("prize", "N/A")
         deadline = item.get("deadline", "N/A")
         level = item.get("level", "N/A")
