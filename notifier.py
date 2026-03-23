@@ -14,6 +14,7 @@ def _strip_html(text: str) -> str:
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+TELEGRAM_THREAD_ID = os.environ.get("TELEGRAM_THREAD_ID")
 
 
 def _send(text: str):
@@ -28,6 +29,8 @@ def _send(text: str):
         "parse_mode": "HTML",
         "disable_web_page_preview": True,
     }
+    if TELEGRAM_THREAD_ID:
+        payload["message_thread_id"] = int(TELEGRAM_THREAD_ID)
     resp = requests.post(url, json=payload, timeout=15)
     if not resp.ok:
         print(f"[Notifier] Telegram error: {resp.text}")
