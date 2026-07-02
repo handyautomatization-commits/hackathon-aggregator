@@ -2,7 +2,7 @@ import json
 import os
 import re
 from datetime import datetime
-from scrapers import devpost, dorahacks, gitcoin, mlh, replit, superteam, reddit, github_search, twitter
+from scrapers import devpost, dorahacks, gitcoin, mlh, replit, superteam, reddit, github_search, twitter, ethglobal, devfolio
 import processor
 import notifier
 
@@ -159,7 +159,7 @@ def main():
     seen = load_seen()
 
     all_items = []
-    for scraper in [devpost, dorahacks, gitcoin, mlh, replit, superteam, reddit, github_search, twitter]:
+    for scraper in [devpost, dorahacks, gitcoin, mlh, replit, superteam, reddit, github_search, twitter, ethglobal, devfolio]:
         name = scraper.__name__.split(".")[-1]
         try:
             items = scraper.fetch()

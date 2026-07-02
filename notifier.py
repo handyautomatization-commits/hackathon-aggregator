@@ -36,6 +36,27 @@ def _send(text: str):
         print(f"[Notifier] Telegram error: {resp.text}")
 
 
+# ── Web2 / Web3 classification ──────────────────────────────────────────────────
+_WEB3_SOURCES = {"DoraHacks", "Gitcoin", "Superteam Earn", "ETHGlobal", "Devfolio"}
+
+_WEB3_KEYWORDS = (
+    "web3", "blockchain", "crypto", "solana", "ethereum", "evm", "defi", "dao",
+    "nft", "smart contract", "on-chain", "onchain", "zk ", "zero-knowledge",
+    "token", "wallet", "polkadot", "cosmos", "layer 2", "layer2", "staking",
+    "dapp", "airdrop", "rollup", "stablecoin",
+)
+
+
+def _track(item: dict) -> str:
+    """Classify an item as 'web2' or 'web3'."""
+    if item.get("track") in ("web2", "web3"):
+        return item["track"]
+    if item.get("source") in _WEB3_SOURCES:
+        return "web3"
+    text = " ".join(str(item.get(k, "")) for k in ("title", "technologies", "description", "raw")).lower()
+    return "web3" if any(kw in text for kw in _WEB3_KEYWORDS) else "web2"
+
+
 def _source_stats(items: list) -> str:
     counts = {}
     for it in items:
@@ -82,7 +103,7 @@ def _flush(messages: list, current: str) -> str:
 
 
 def send_digest(items: list):
-    """Format and send weekly digest to Telegram."""
+    """Format and send weekly digest to Telegram, split into Web2 / Web3 sections."""
     today = datetime.utcnow().strftime("%d %b %Y")
 
     main_items = [it for it in items if not it.get("_is_pointer")]
@@ -93,34 +114,38 @@ def send_digest(items: list):
         return
 
     MAX_LEN = 4000
-    header = f"🏆 <b>Weekly Coding Competitions | {today}</b>\n\n"
-    current_msg = header
+    # Mutable holder so nested helpers can flush across the 4000-char limit
+    state = {"msg": f"🏆 <b>Weekly Coding Competitions | {today}</b>\n\n"}
 
-    for i, item in enumerate(main_items, 1):
-        block = _format_block(i, item)
-        if len(current_msg) + len(block) > MAX_LEN:
-            _send(current_msg.rstrip())
-            current_msg = block
-        else:
-            current_msg += block
+    def _append(chunk: str):
+        if len(state["msg"]) + len(chunk) > MAX_LEN and state["msg"].strip():
+            _send(state["msg"].rstrip())
+            state["msg"] = ""
+        state["msg"] += chunk
 
-    # Stats line
-    stats = f"Total: {len(main_items)} competitions\nSources: {_source_stats(main_items)}"
-    if len(current_msg) + len(stats) > MAX_LEN:
-        _send(current_msg.rstrip())
-        current_msg = stats
-    else:
-        current_msg += stats
+    def _section(heading: str, mains: list, ptrs: list):
+        if not mains and not ptrs:
+            return
+        _append(f"{heading}\n\n")
+        for i, item in enumerate(mains, 1):
+            _append(_format_block(i, item))
+        if ptrs:
+            also = "🔍 <b>Also check:</b>\n"
+            for it in ptrs:
+                also += f"• {it.get('title', 'N/A')} — {it.get('url', '')}\n"
+            _append(also + "\n")
 
-    # "Also check" section for pointer items
-    if pointer_items:
-        also_check = "\n\n🔍 <b>Also check:</b>\n"
-        for it in pointer_items:
-            also_check += f"• {it.get('title', 'N/A')} — {it.get('url', '')}\n"
-        if len(current_msg) + len(also_check) > MAX_LEN:
-            _send(current_msg.rstrip())
-            _send(also_check.strip())
-        else:
-            _send((current_msg + also_check).rstrip())
-    else:
-        _send(current_msg.rstrip())
+    web2_main = [it for it in main_items if _track(it) == "web2"]
+    web3_main = [it for it in main_items if _track(it) == "web3"]
+    web2_ptr = [it for it in pointer_items if _track(it) == "web2"]
+    web3_ptr = [it for it in pointer_items if _track(it) == "web3"]
+
+    _section("🌐 <b>WEB2</b>", web2_main, web2_ptr)
+    _section("⛓️ <b>WEB3</b>", web3_main, web3_ptr)
+
+    _append(f"Total: {len(main_items)} competitions "
+            f"(Web2: {len(web2_main)}, Web3: {len(web3_main)})\n"
+            f"Sources: {_source_stats(main_items)}")
+
+    if state["msg"].strip():
+        _send(state["msg"].rstrip())
